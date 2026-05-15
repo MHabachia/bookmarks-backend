@@ -1,13 +1,11 @@
 # Bookmark App – Backend
 
-Einfache Bookmark-App als Studiumsprojekt im Fach **Webtechnologien** an der HTW Berlin.
-
+Eine einfache Lesezeichen-Verwaltungs WebApp, entwickelt im Rahmen eines Projekts für den Kurs Webtechnologien an der HTW Berlin.
 ## Technologie-Stack
 
 - **Java 21**
 - **Spring Boot 4.0**
 - **Gradle** (Build-Tool)
-- **Lombok** (weniger Boilerplate)
 
 ## Projektbeschreibung
 
@@ -37,6 +35,10 @@ Die API ist dann erreichbar unter: `http://localhost:8080/api/bookmarks`
 
 ## Team
 
-| Name | Rolle |
-|------|-------|
-| ...  | ...   |
+- **Team: 40** · **Kurs: Webtechnologien**
+- Studiengang: Wirtschaftsinfromatik · HTW Berlin · SoSe 2026
+
+| Name              | GitHub     |
+|-------------------|------------|
+| Mohamad Habachia  | @MHabachia |
+| Ibrahim Hassan    | @Hassan9977|
