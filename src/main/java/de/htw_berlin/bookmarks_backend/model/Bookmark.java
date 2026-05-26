@@ -48,7 +48,7 @@ public class Bookmark {
     private Boolean favorit = false;
 
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "bookmark_tags", joinColumns = @JoinColumn(name = "bookmark_id"))
     @Column(name = "tag")
     private List<String> tags;
