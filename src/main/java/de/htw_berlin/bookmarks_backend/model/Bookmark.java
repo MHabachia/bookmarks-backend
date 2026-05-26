@@ -1,58 +1,99 @@
 package de.htw_berlin.bookmarks_backend.model;
 
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 /**
- * Repräsentiert einen Bookmark (Lesezeichen) in der BookmarkIt-Anwendung.
+ * JPA-Entity für einen Bookmark in der BookmarkIt-Anwendung.
  *
- * <p>Diese Klasse dient als Datenmodell für einen einzelnen Bookmark.
- * Sie wird vom {@link de.htw_berlin.bookmarks_backend.controller.bookmarkcontroller} verwendet,
- * um Bookmark-Daten als JSON über die REST-API auszuliefern.</p>
+ * <p>Repräsentiert einen Datensatz in der Tabelle {@code bookmarks}
+ * in der PostgreSQL-Datenbank. Die Tabelle wird durch Flyway-Migration
+ * {@code V1__create_bookmarks.sql} erstellt.</p>
  *
- * <p>Lombok-Annotationen generieren automatisch Getter, Setter,
- * {@code toString()}, {@code equals()} und {@code hashCode()} sowie
- * beide Konstruktoren zur Compile-Zeit.</p>
+ * <p>Lombok generiert automatisch Getter, Setter, toString(),
+ * equals(), hashCode() und beide Konstruktoren.</p>
  *
- * <p>Beispiel-JSON-Darstellung eines Bookmarks:</p>
- * <pre>
- * {
- *   "id": 1,
- *   "title": "HTW Berlin",
- *   "url": "https://www.htw-berlin.de",
- *   "description": "Hochschule für Technik und Wirtschaft Berlin"
- * }
- * </pre>
+ * @author Mohamad Habachia, Ibrahim Hassan
+ * @version 2.0
+ * @since SoSe 2026
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "bookmarks")
 public class Bookmark {
 
     /**
-     * Die eindeutige ID des Bookmarks.
-     * <p>Wird als {@code Long} (nicht primitives {@code long}) definiert, da der Wert {@code null} sein kann — z.B. vor dem Speichern
-     * in der Datenbank später.</p>
+     * Primärschlüssel — wird von PostgreSQL automatisch generiert (BIGSERIAL).
      */
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     /**
-     * Der Titel des Bookmarks.
-     * <p>Wird in der UI als Hauptüberschrift der Bookmark-Karte angezeigt.
-     * Pflichtfeld — darf nicht leer sein.</p>
+     * Titel des Bookmarks. Pflichtfeld, max. 255 Zeichen.
      */
+    @NotBlank(message = "Titel darf nicht leer sein")
+    @Size(max = 255, message = "Titel darf maximal 255 Zeichen haben")
+    @Column(nullable = false)
     private String title;
 
     /**
-     * Die vollständige URL des Bookmarks inklusive Protokoll.
-     * <p>Pflichtfeld — muss eine gültige URL sein.</p>
+     * Vollständige URL inkl. Protokoll. Pflichtfeld, max. 500 Zeichen.
      */
+    @NotBlank(message = "URL darf nicht leer sein")
+    @Size(max = 500, message = "URL darf maximal 500 Zeichen haben")
+    @Column(nullable = false)
     private String url;
 
     /**
-     * Eine kurze Beschreibung des Bookmarks.
-     * <p>Optionales Feld — gibt dem Nutzer zusätzliche Informationen über den verlinkten Inhalt.</p>
+     * Optionale Beschreibung des Bookmarks.
      */
+    @Column(columnDefinition = "TEXT")
     private String description;
+
+    /**
+     * Gibt an ob der Bookmark als gelesen markiert wurde.
+     * Standard: false
+     */
+    @Column(nullable = false)
+    private Boolean gelesen = false;
+
+    /**
+     * Gibt an ob der Bookmark als Favorit markiert wurde.
+     * Standard: false
+     */
+    @Column(nullable = false)
+    private Boolean favorit = false;
+
+    /**
+     * Tags / Kategorien des Bookmarks.
+     * Wird als separate Tabelle (bookmarks_tags) gespeichert.
+     */
+    @ElementCollection
+    @CollectionTable(name = "bookmark_tags", joinColumns = @JoinColumn(name = "bookmark_id"))
+    @Column(name = "tag")
+    private List<String> tags;
+
+    /**
+     * Erstellungszeitpunkt — wird automatisch beim Erstellen gesetzt.
+     */
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    /**
+     * Setzt createdAt automatisch vor dem ersten Speichern.
+     */
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+    }
 }
