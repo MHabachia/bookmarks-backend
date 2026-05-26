@@ -251,7 +251,7 @@ cd bookmarks-backend
 
 ## Deployment
 
-Das Backend läuft auf einem selbst gehosteten Server (Proxmox LXC, Ubuntu 24.04).  
+Das Backend läuft auf einem selbst gehosteten Server (Virtuelle Maschine, Ubuntu 24.04).  
 Nginx leitet `/api`-Anfragen intern an Spring Boot weiter.
 
 ### Architektur
