@@ -35,3 +35,27 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Build
+build/
+.gradle/
+out/
+
+# !! WICHTIG: Lokale Properties mit Secrets !!
+src/main/resources/application-local.properties
+
+# Diese darf committed werden (keine echten Werte drin)
+# src/main/resources/application.properties  ← bleibt drin
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# JAR (wird on Render gebaut, nicht nötig im Repo)
+*.jar

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,165 +15,94 @@ import java.util.List;
 /**
  * REST-Controller für die Bookmark-API.
  *
- * <p>Stellt folgende HTTP-Endpunkte bereit:</p>
+ * <p>Änderungen gegenüber v1.4:</p>
  * <ul>
- *   <li>{@code GET    /api/bookmarks}      — alle Bookmarks laden</li>
- *   <li>{@code GET    /api/bookmarks/{id}} — einzelnen Bookmark laden</li>
- *   <li>{@code POST   /api/bookmarks}      — neuen Bookmark erstellen</li>
- *   <li>{@code PUT    /api/bookmarks/{id}} — Bookmark aktualisieren</li>
- *   <li>{@code DELETE /api/bookmarks/{id}} — Bookmark löschen</li>
+ *   <li>{@code @CrossOrigin} entfernt — CORS wird jetzt zentral in {@code SecurityConfig} geregelt</li>
+ *   <li>Alle Methoden erhalten den {@link JwtAuthenticationToken} Parameter —
+ *       damit kann die Auth0-User-ID ({@code sub} Claim) ausgelesen werden</li>
+ *   <li>Bookmarks werden nur noch für den eingeloggten User geladen/erstellt</li>
  * </ul>
  *
- * <p>{@code @CrossOrigin(origins = "*")} erlaubt Anfragen von allen Origins —
- * notwendig damit das Vue.js Frontend (Port 5173) das Backend (Port 8080)
- * im "lokalen" Entwicklungsmodus erreichen kann.</p>
- *
- * <p>{@code @RequiredArgsConstructor} generiert den Konstruktor für
- * Constructor Injection des {@link BookmarkService}.</p>
- *
  * @author Mohamad Habachia, Ibrahim Hassan
- * @version 1.4
+ * @version 2.0
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*")
+// @CrossOrigin ENTFERNT — wird jetzt in SecurityConfig.corsConfigurationSource() geregelt
 @RequiredArgsConstructor
 public class BookmarkController {
 
-    /** Service-Schicht für die Geschäftslogik. */
     private final BookmarkService bookmarkService;
 
     /**
-     * Gibt alle Bookmarks zurück.
+     * Gibt alle Bookmarks des eingeloggten Users zurück.
      *
-     * <p>Beispiel-Request:</p>
-     * <pre>GET /api/bookmarks</pre>
+     * <p>{@code token.getName()} gibt den {@code sub}-Claim des JWT zurück,
+     * z.B. {@code "auth0|abc123"} — das ist die eindeutige Auth0 User-ID.</p>
      *
-     * <p>Beispiel-Response:</p>
-     * <pre>
-     * HTTP 200 OK
-     * [
-     *   {
-     *     "id": 1,
-     *     "title": "HTW Berlin",
-     *     "url": "https://www.htw-berlin.de",
-     *     "description": "...",
-     *     "gelesen": false,
-     *     "favorit": false,
-     *     "tags": ["Studium"],
-     *     "createdAt": "2026-05-26T12:00:00"
-     *   }
-     * ]
-     * </pre>
-     *
-     * @return Liste aller Bookmarks als JSON, leere Liste {@code []} wenn keine vorhanden
+     * @param token der JWT-Token des eingeloggten Users (von Spring Security injiziert)
+     * @return Liste der Bookmarks dieses Users
      */
     @GetMapping(value = "/bookmarks", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<Bookmark> getBookmarks() {
-        return bookmarkService.getAllBookmarks();
+    public List<Bookmark> getBookmarks(JwtAuthenticationToken token) {
+        String ownerId = token.getName(); // Auth0 sub: "auth0|abc123"
+        return bookmarkService.getAllBookmarks(ownerId);
     }
 
     /**
-     * Gibt einen einzelnen Bookmark anhand der ID zurück.
-     *
-     * <p>Beispiel-Request:</p>
-     * <pre>GET /api/bookmarks/1</pre>
-     *
-     * @param id die ID des gesuchten Bookmarks (Pfadvariable)
-     * @return {@code 200 OK} mit Bookmark-JSON wenn gefunden,
-     *         {@code 404 Not Found} wenn die ID nicht existiert
+     * Gibt einen einzelnen Bookmark des eingeloggten Users zurück.
+     * Gibt 404 zurück wenn der Bookmark einem anderen User gehört.
      */
     @GetMapping(value = "/bookmarks/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Bookmark> getBookmarkById(@PathVariable Long id) {
-        return bookmarkService.getBookmarkById(id)
+    public ResponseEntity<Bookmark> getBookmarkById(
+            @PathVariable Long id,
+            JwtAuthenticationToken token) {
+        String ownerId = token.getName();
+        return bookmarkService.getBookmarkById(id, ownerId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     /**
-     * Erstellt einen neuen Bookmark.
-     *
-     * <p>{@code @Valid} aktiviert die Bean-Validierung — {@code @NotBlank} auf
-     * {@code title} und {@code url} in der {@link Bookmark}-Entity wird geprüft.
-     * Bei Validierungsfehler wird automatisch {@code 400 Bad Request} zurückgegeben.</p>
-     *
-     * <p>Beispiel-Request:</p>
-     * <pre>
-     * POST /api/bookmarks
-     * Content-Type: application/json
-     *
-     * {
-     *   "title": "HTW Berlin",
-     *   "url": "https://www.htw-berlin.de",
-     *   "description": "Hochschule Berlin",
-     *   "tags": ["Studium", "HTW"]
-     * }
-     * </pre>
-     *
-     * @param bookmark das neue Bookmark aus dem Request-Body (JSON)
-     * @return {@code 201 Created} mit dem gespeicherten Bookmark inkl. generierter ID
+     * Erstellt einen neuen Bookmark für den eingeloggten User.
+     * Die {@code ownerId} wird aus dem Token gesetzt — das Frontend muss sie nicht mitsenden.
      */
     @PostMapping(value = "/bookmarks",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Bookmark> createBookmark(@Valid @RequestBody Bookmark bookmark) {
-        Bookmark saved = bookmarkService.createBookmark(bookmark);
+    public ResponseEntity<Bookmark> createBookmark(
+            @Valid @RequestBody Bookmark bookmark,
+            JwtAuthenticationToken token) {
+        String ownerId = token.getName();
+        Bookmark saved = bookmarkService.createBookmark(bookmark, ownerId);
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     /**
-     * Aktualisiert einen bestehenden Bookmark.
-     *
-     * <p>Wird auch für den Favorit/Gelesen-Toggle genutzt — das Frontend
-     * sendet das vollständige Bookmark-Objekt mit dem geänderten Status.</p>
-     *
-     * <p>Beispiel-Request:</p>
-     * <pre>
-     * PUT /api/bookmarks/1
-     * Content-Type: application/json
-     *
-     * {
-     *   "id": 1,
-     *   "title": "HTW Berlin",
-     *   "url": "https://www.htw-berlin.de",
-     *   "favorit": true,
-     *   "gelesen": false,
-     *   "tags": ["Studium"]
-     * }
-     * </pre>
-     *
-     * @param id       die ID des zu aktualisierenden Bookmarks (Pfadvariable)
-     * @param bookmark die neuen Daten aus dem Request-Body (JSON)
-     * @return {@code 200 OK} mit aktualisiertem Bookmark,
-     *         {@code 404 Not Found} wenn die ID nicht existiert
+     * Aktualisiert einen Bookmark — nur wenn er dem eingeloggten User gehört.
      */
     @PutMapping(value = "/bookmarks/{id}",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Bookmark> updateBookmark(
             @PathVariable Long id,
-            @Valid @RequestBody Bookmark bookmark) {
-        return bookmarkService.updateBookmark(id, bookmark)
+            @Valid @RequestBody Bookmark bookmark,
+            JwtAuthenticationToken token) {
+        String ownerId = token.getName();
+        return bookmarkService.updateBookmark(id, bookmark, ownerId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     /**
-     * Löscht einen Bookmark anhand der ID.
-     *
-     * <p>Beim Löschen werden auch alle zugehörigen Tags automatisch
-     * mitgelöscht ({@code ON DELETE CASCADE} in der Datenbank).</p>
-     *
-     * <p>Beispiel-Request:</p>
-     * <pre>DELETE /api/bookmarks/1</pre>
-     *
-     * @param id die ID des zu löschenden Bookmarks (Pfadvariable)
-     * @return {@code 204 No Content} wenn erfolgreich gelöscht,
-     *         {@code 404 Not Found} wenn die ID nicht existiert
+     * Löscht einen Bookmark — nur wenn er dem eingeloggten User gehört.
      */
     @DeleteMapping("/bookmarks/{id}")
-    public ResponseEntity<Void> deleteBookmark(@PathVariable Long id) {
-        if (bookmarkService.deleteBookmark(id)) {
+    public ResponseEntity<Void> deleteBookmark(
+            @PathVariable Long id,
+            JwtAuthenticationToken token) {
+        String ownerId = token.getName();
+        if (bookmarkService.deleteBookmark(id, ownerId)) {
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.notFound().build();
