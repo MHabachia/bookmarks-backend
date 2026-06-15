@@ -19,25 +19,21 @@ import java.util.List;
 /**
  * Spring Security Konfiguration für JWT-Validierung via Auth0.
  *
- * Spring Boot 4.0 erfordert einen explizit definierten JwtDecoder Bean —
- * die Auto-Konfiguration über application.properties reicht nicht mehr aus.
- *
  * @author Mohamad Habachia, Ibrahim Hassan
- * @version 2.1
+ * @version 2.2
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
+    // Liest auth0.issuer-uri aus application.properties
+    // → wird befüllt aus Render Umgebungsvariable AUTH0_ISSUER_URI
+    @Value("${auth0.issuer-uri}")
     private String issuerUri;
 
     @Value("${frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
-    /**
-     * Security Filter Chain — alle /api/** Routen erfordern JWT-Authentifizierung.
-     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -56,11 +52,8 @@ public class SecurityConfig {
     }
 
     /**
-     * Expliziter JwtDecoder Bean — benötigt für Spring Boot 4.0.
-     *
-     * Lädt den JWKS (JSON Web Key Set) von Auth0 und validiert damit
-     * die Signatur jedes eingehenden JWT-Tokens.
-     *
+     * Expliziter JwtDecoder Bean — erforderlich für Spring Boot 4.0.
+     * Holt den JWKS automatisch vom Auth0 Discovery-Endpoint.
      */
     @Bean
     public JwtDecoder jwtDecoder() {
@@ -69,9 +62,6 @@ public class SecurityConfig {
             .build();
     }
 
-    /**
-     * CORS — nur Anfragen vom Frontend werden erlaubt.
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
