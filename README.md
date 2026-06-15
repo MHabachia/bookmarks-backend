@@ -247,29 +247,16 @@ cd bookmarks-backend
 # JAR liegt in: build/libs/bookmarks-backend-0.0.1-SNAPSHOT.jar
 ```
 
----
+## Aktuelle Deployment
 
-## Deployment
-
-Das Backend läuft auf einem selbst gehosteten Server (Virtuelle Maschine, Ubuntu 24.04).  
-Nginx leitet `/api`-Anfragen intern an Spring Boot weiter.
+Das Backend wird auf **Render** als Web Service deployed.
+Die PostgreSQL-Datenbank wird als Render-Managed-Database betrieben.
 
 ### Architektur
 
 ```
-Internet → Reverse-Proxy (SSL) → Nginx (Port 80) → Spring Boot (Port 8080) → PostgreSQL (Port 5432)
+Internet → Render (SSL) → Spring Boot (Port 8080) → PostgreSQL
 ```
-
-### Deploy-Befehl
-
-```bash
-cd /opt/bookmarkit/bookmarks-backend
-git pull
-./gradlew bootJar
-systemctl restart bookmarkit
-```
-
----
 
 ## Milestones
 
