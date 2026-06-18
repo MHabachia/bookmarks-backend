@@ -1,6 +1,8 @@
 package de.htw_berlin.bookmarks_backend.repository;
 
 import de.htw_berlin.bookmarks_backend.model.Bookmark;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integrationstests für BookmarkRepository mit echter PostgreSQL via Testcontainers.
+ * Flyway wird manuell vor dem Spring-Context ausgeführt.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
@@ -33,21 +36,26 @@ class BookmarkRepositoryTest {
         .withUsername("test")
         .withPassword("test");
 
-    /**
-     * Alle DB-Properties werden dynamisch aus dem laufenden Container gesetzt.
-     * Das stellt sicher dass Flyway die richtige URL bekommt.
-     */
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",      postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.flyway.url",          postgres::getJdbcUrl);
-        registry.add("spring.flyway.user",         postgres::getUsername);
-        registry.add("spring.flyway.password",     postgres::getPassword);
-        registry.add("spring.flyway.enabled",      () -> "true");
-        registry.add("spring.flyway.locations",    () -> "classpath:db/migration");
+        registry.add("spring.flyway.enabled",      () -> "false");
         registry.add("spring.main.allow-bean-definition-overriding", () -> "true");
+    }
+
+    /**
+     * Flyway manuell ausführen — bevor Spring Boot den Context lädt.
+     * So sind die Tabellen garantiert vorhanden wenn die Tests starten.
+     */
+    @BeforeAll
+    static void runMigrations() {
+        Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .locations("classpath:db/migration")
+            .load()
+            .migrate();
     }
 
     @Autowired
