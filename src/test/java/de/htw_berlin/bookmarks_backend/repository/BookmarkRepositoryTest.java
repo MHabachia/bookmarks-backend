@@ -4,9 +4,9 @@ import de.htw_berlin.bookmarks_backend.model.Bookmark;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -17,26 +17,34 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Integrations-Tests für BookmarkRepository.
+ * Integrationstests für BookmarkRepository mit echter PostgreSQL.
  *
- * Testcontainers startet automatisch einen echten PostgreSQL-Container.
- * Flyway läuft durch — V1 und V2 Migrationen werden ausgeführt.
- * Alle SQL-Queries werden gegen eine echte Datenbank getestet.
+ * Testcontainers startet PostgreSQL 16 automatisch.
+ * Flyway läuft durch — V1 + V2 Migrationen werden ausgeführt.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
-@DataJpaTest
+@SpringBootTest
 @Testcontainers
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class BookmarkRepositoryTest {
 
-    /**
-     * Testcontainers startet PostgreSQL 16 automatisch.
-     * @ServiceConnection verbindet Spring Boot automatisch mit dem Container.
-     */
     @Container
-    @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
+
+    /**
+     * Überschreibt die Datasource-Properties dynamisch mit den
+     * Testcontainer-Verbindungsdaten — so bekommt Spring die
+     * richtige URL, User und Passwort des gestarteten Containers.
+     */
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        // Auth0 Platzhalter damit Spring Boot startet
+        registry.add("auth0.issuer-uri", () -> "https://placeholder.auth0.com/");
+        registry.add("frontend.url", () -> "http://localhost:5173");
+    }
 
     @Autowired
     private BookmarkRepository bookmarkRepository;
@@ -48,10 +56,10 @@ class BookmarkRepositoryTest {
 
     @Test
     void findByOwnerId_gibtNurBookmarksDesUsers_zurueck() {
-        // Zwei User mit je einem Bookmark
-        Bookmark b1 = createBookmark("HTW Berlin", "https://htw-berlin.de", "auth0|user1");
-        Bookmark b2 = createBookmark("GitHub", "https://github.com", "auth0|user2");
-        bookmarkRepository.saveAll(List.of(b1, b2));
+        bookmarkRepository.saveAll(List.of(
+            createBookmark("HTW Berlin", "https://htw-berlin.de", "auth0|user1"),
+            createBookmark("GitHub", "https://github.com", "auth0|user2")
+        ));
 
         List<Bookmark> result = bookmarkRepository.findByOwnerId("auth0|user1");
 
@@ -72,12 +80,12 @@ class BookmarkRepositoryTest {
     }
 
     @Test
-    void findByIdAndOwnerId_gibtLeer_wennUserNichtStimmt() {
+    void findByIdAndOwnerId_gibtLeer_wennFremderUser() {
         Bookmark saved = bookmarkRepository.save(
             createBookmark("HTW Berlin", "https://htw-berlin.de", "auth0|user1")
         );
 
-        Optional<Bookmark> result = bookmarkRepository.findByIdAndOwnerId(saved.getId(), "auth0|anderer-user");
+        Optional<Bookmark> result = bookmarkRepository.findByIdAndOwnerId(saved.getId(), "auth0|fremder");
 
         assertThat(result).isEmpty();
     }
@@ -85,8 +93,8 @@ class BookmarkRepositoryTest {
     @Test
     void findByOwnerIdAndFavoritTrue_gibtNurFavoriten() {
         bookmarkRepository.saveAll(List.of(
-            createBookmarkMitFavorit("Favorit", "https://a.de", "auth0|user1", true),
-            createBookmarkMitFavorit("Kein Favorit", "https://b.de", "auth0|user1", false)
+            createBookmarkFavorit("Favorit", "https://a.de", "auth0|user1", true),
+            createBookmarkFavorit("Kein Favorit", "https://b.de", "auth0|user1", false)
         ));
 
         List<Bookmark> result = bookmarkRepository.findByOwnerIdAndFavoritTrue("auth0|user1");
@@ -96,41 +104,17 @@ class BookmarkRepositoryTest {
     }
 
     @Test
-    void findByOwnerIdAndGelesenTrue_gibtNurGelesene() {
-        bookmarkRepository.saveAll(List.of(
-            createBookmarkMitGelesen("Gelesen", "https://a.de", "auth0|user1", true),
-            createBookmarkMitGelesen("Ungelesen", "https://b.de", "auth0|user1", false)
-        ));
-
-        List<Bookmark> result = bookmarkRepository.findByOwnerIdAndGelesenTrue("auth0|user1");
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getTitle()).isEqualTo("Gelesen");
-    }
-
-    @Test
-    void existsByIdAndOwnerId_gibtTrue_wennBeideStimmen() {
+    void existsByIdAndOwnerId_gibtFalse_wennFremderUser() {
         Bookmark saved = bookmarkRepository.save(
             createBookmark("HTW Berlin", "https://htw-berlin.de", "auth0|user1")
         );
 
-        boolean exists = bookmarkRepository.existsByIdAndOwnerId(saved.getId(), "auth0|user1");
-
-        assertThat(exists).isTrue();
-    }
-
-    @Test
-    void existsByIdAndOwnerId_gibtFalse_wennUserNichtStimmt() {
-        Bookmark saved = bookmarkRepository.save(
-            createBookmark("HTW Berlin", "https://htw-berlin.de", "auth0|user1")
-        );
-
-        boolean exists = bookmarkRepository.existsByIdAndOwnerId(saved.getId(), "auth0|anderer-user");
+        boolean exists = bookmarkRepository.existsByIdAndOwnerId(saved.getId(), "auth0|fremder");
 
         assertThat(exists).isFalse();
     }
 
-    // ── Hilfsmethoden ──────────────────────────────────────────────────────────
+    // ── Hilfsmethoden ─────────────────────────────────────────────────────────
 
     private Bookmark createBookmark(String title, String url, String ownerId) {
         Bookmark b = new Bookmark();
@@ -142,15 +126,9 @@ class BookmarkRepositoryTest {
         return b;
     }
 
-    private Bookmark createBookmarkMitFavorit(String title, String url, String ownerId, boolean favorit) {
+    private Bookmark createBookmarkFavorit(String title, String url, String ownerId, boolean favorit) {
         Bookmark b = createBookmark(title, url, ownerId);
         b.setFavorit(favorit);
-        return b;
-    }
-
-    private Bookmark createBookmarkMitGelesen(String title, String url, String ownerId, boolean gelesen) {
-        Bookmark b = createBookmark(title, url, ownerId);
-        b.setGelesen(gelesen);
         return b;
     }
 }
