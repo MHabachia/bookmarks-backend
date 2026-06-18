@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -18,9 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integrationstests für BookmarkRepository mit echter PostgreSQL.
- *
- * Testcontainers startet PostgreSQL 16 automatisch.
- * Flyway läuft durch — V1 + V2 Migrationen werden ausgeführt.
+ * JwtDecoder wird gemockt damit kein echter Auth0-Aufruf stattfindet.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
@@ -31,17 +31,15 @@ class BookmarkRepositoryTest {
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
-    /**
-     * Überschreibt die Datasource-Properties dynamisch mit den
-     * Testcontainer-Verbindungsdaten — so bekommt Spring die
-     * richtige URL, User und Passwort des gestarteten Containers.
-     */
+    // JwtDecoder mocken — verhindert Auth0-Aufruf beim Start
+    @MockBean
+    JwtDecoder jwtDecoder;
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-        // Auth0 Platzhalter damit Spring Boot startet
         registry.add("auth0.issuer-uri", () -> "https://placeholder.auth0.com/");
         registry.add("frontend.url", () -> "http://localhost:5173");
     }
@@ -113,8 +111,6 @@ class BookmarkRepositoryTest {
 
         assertThat(exists).isFalse();
     }
-
-    // ── Hilfsmethoden ─────────────────────────────────────────────────────────
 
     private Bookmark createBookmark(String title, String url, String ownerId) {
         Bookmark b = new Bookmark();
