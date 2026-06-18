@@ -10,23 +10,8 @@ jobs:
   test-and-build:
     name: Test & Build
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: ${{ secrets.TEST_DB_NAME }}
-          POSTGRES_USER: ${{ secrets.TEST_DB_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
-        ports:
-          - 5432:5432
-
-
-        options: >-
-          --health-cmd "pg_isready -h localhost"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # Docker ist auf ubuntu-latest verfügbar — Testcontainers startet
+    # PostgreSQL automatisch aus dem Test-Code heraus
 
     steps:
       - name: Checkout Repository
@@ -42,10 +27,13 @@ jobs:
       - name: Gradle Wrapper berechtigen
         run: chmod +x gradlew
 
-      - name: JUnit Tests ausführen
+
+      # Unit-Tests (Mockito) + Integrationstests (echte DB) laufen zusammen
+      - name: Tests ausführen
         run: ./gradlew test --no-daemon
         env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/${{ secrets.TEST_DB_NAME }}
+          # Fallback-Werte — Testcontainers überschreibt diese automatisch
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/test
           SPRING_DATASOURCE_USERNAME: ${{ secrets.TEST_DB_USER }}
           SPRING_DATASOURCE_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
           AUTH0_ISSUER_URI: ${{ secrets.AUTH0_ISSUER_URI }}
@@ -54,7 +42,7 @@ jobs:
       - name: Production Build erstellen
         run: ./gradlew bootJar -x test --no-daemon
         env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/${{ secrets.TEST_DB_NAME }}
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/test
           SPRING_DATASOURCE_USERNAME: ${{ secrets.TEST_DB_USER }}
           SPRING_DATASOURCE_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
           AUTH0_ISSUER_URI: ${{ secrets.AUTH0_ISSUER_URI }}
