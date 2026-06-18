@@ -1,12 +1,12 @@
 package de.htw_berlin.bookmarks_backend.repository;
 
+import de.htw_berlin.bookmarks_backend.config.TestSecurityConfig;
 import de.htw_berlin.bookmarks_backend.model.Bookmark;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -20,20 +20,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integrationstests für BookmarkRepository mit echter PostgreSQL.
- * JwtDecoder wird gemockt damit kein echter Auth0-Aufruf stattfindet.
+ *
+ * Testcontainers startet PostgreSQL 16 automatisch.
+ * Flyway läuft durch — V1 + V2 Migrationen werden ausgeführt.
+ * JwtDecoder wird durch TestSecurityConfig gemockt.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
 @SpringBootTest
 @Testcontainers
+@Import(TestSecurityConfig.class)
 class BookmarkRepositoryTest {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
-
-    // JwtDecoder mocken — verhindert Auth0-Aufruf beim Start
-    @MockBean
-    JwtDecoder jwtDecoder;
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
