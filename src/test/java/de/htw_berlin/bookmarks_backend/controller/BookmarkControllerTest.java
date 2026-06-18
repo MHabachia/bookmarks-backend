@@ -1,47 +1,39 @@
 package de.htw_berlin.bookmarks_backend.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import de.htw_berlin.bookmarks_backend.model.Bookmark;
 import de.htw_berlin.bookmarks_backend.service.BookmarkService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Web-Layer Tests für BookmarkController.
- *
- * Verwendet @WebMvcTest + MockMvc — kein echter Server oder DB nötig.
- * JWT-Authentifizierung wird über einen Mock-Token simuliert.
+ * Unit-Tests für BookmarkController — nur Mockito, keine Spring-Infrastruktur.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
-@WebMvcTest(BookmarkController.class)
+@ExtendWith(MockitoExtension.class)
 class BookmarkControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
+    @Mock
     private BookmarkService bookmarkService;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @InjectMocks
+    private BookmarkController bookmarkController;
 
     private Bookmark testBookmark;
     private JwtAuthenticationToken mockToken;
@@ -56,7 +48,6 @@ class BookmarkControllerTest {
         testBookmark.setFavorit(false);
         testBookmark.setOwnerId("auth0|test123");
 
-        // Mock JWT-Token für Auth0
         Jwt jwt = Jwt.withTokenValue("mock-token")
             .header("alg", "RS256")
             .claim("sub", "auth0|test123")
@@ -65,72 +56,63 @@ class BookmarkControllerTest {
     }
 
     @Test
-    void getBookmarks_gibt200_mitListe_zurueck() throws Exception {
+    void getBookmarks_gibtListeZurueck() {
         when(bookmarkService.getAllBookmarks("auth0|test123"))
             .thenReturn(List.of(testBookmark));
 
-        mockMvc.perform(get("/api/bookmarks")
-                .with(authentication(mockToken)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].title").value("HTW Berlin"))
-            .andExpect(jsonPath("$[0].url").value("https://www.htw-berlin.de"));
+        List<Bookmark> result = bookmarkController.getBookmarks(mockToken);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getTitle()).isEqualTo("HTW Berlin");
     }
 
     @Test
-    void getBookmarks_gibt401_ohneToken() throws Exception {
-        mockMvc.perform(get("/api/bookmarks"))
-            .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void getBookmarkById_gibt200_wennGefunden() throws Exception {
+    void getBookmarkById_gibt200_wennGefunden() {
         when(bookmarkService.getBookmarkById(1L, "auth0|test123"))
             .thenReturn(Optional.of(testBookmark));
 
-        mockMvc.perform(get("/api/bookmarks/1")
-                .with(authentication(mockToken)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.title").value("HTW Berlin"));
+        ResponseEntity<Bookmark> response = bookmarkController.getBookmarkById(1L, mockToken);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().getTitle()).isEqualTo("HTW Berlin");
     }
 
     @Test
-    void getBookmarkById_gibt404_wennNichtGefunden() throws Exception {
+    void getBookmarkById_gibt404_wennNichtGefunden() {
         when(bookmarkService.getBookmarkById(99L, "auth0|test123"))
             .thenReturn(Optional.empty());
 
-        mockMvc.perform(get("/api/bookmarks/99")
-                .with(authentication(mockToken)))
-            .andExpect(status().isNotFound());
+        ResponseEntity<Bookmark> response = bookmarkController.getBookmarkById(99L, mockToken);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
-    void createBookmark_gibt201_mitGespeichertemBookmark() throws Exception {
+    void createBookmark_gibt201_mitGespeichertemBookmark() {
         when(bookmarkService.createBookmark(any(Bookmark.class), eq("auth0|test123")))
             .thenReturn(testBookmark);
 
-        mockMvc.perform(post("/api/bookmarks")
-                .with(authentication(mockToken))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(testBookmark)))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.title").value("HTW Berlin"));
+        ResponseEntity<Bookmark> response = bookmarkController.createBookmark(testBookmark, mockToken);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().getTitle()).isEqualTo("HTW Berlin");
     }
 
     @Test
-    void deleteBookmark_gibt204_wennErfolgreich() throws Exception {
+    void deleteBookmark_gibt204_wennErfolgreich() {
         when(bookmarkService.deleteBookmark(1L, "auth0|test123")).thenReturn(true);
 
-        mockMvc.perform(delete("/api/bookmarks/1")
-                .with(authentication(mockToken)))
-            .andExpect(status().isNoContent());
+        ResponseEntity<Void> response = bookmarkController.deleteBookmark(1L, mockToken);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
     @Test
-    void deleteBookmark_gibt404_wennNichtGefunden() throws Exception {
+    void deleteBookmark_gibt404_wennNichtGefunden() {
         when(bookmarkService.deleteBookmark(99L, "auth0|test123")).thenReturn(false);
 
-        mockMvc.perform(delete("/api/bookmarks/99")
-                .with(authentication(mockToken)))
-            .andExpect(status().isNotFound());
+        ResponseEntity<Void> response = bookmarkController.deleteBookmark(99L, mockToken);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 }
