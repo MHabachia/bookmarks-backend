@@ -20,10 +20,10 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
         ports:
           - 5432:5432
-        # -U gibt den korrekten User an — ohne das versucht pg_isready
-        # sich als "root" (GitHub Actions Runner User) zu verbinden
+
+
         options: >-
-          --health-cmd "pg_isready -U ${{ secrets.TEST_DB_USER }}"
+          --health-cmd "pg_isready -h localhost"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
