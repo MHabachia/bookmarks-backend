@@ -3,6 +3,7 @@ package de.htw_berlin.bookmarks_backend.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -26,8 +27,6 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // Liest auth0.issuer-uri aus application.properties
-    // → wird befüllt aus Render Umgebungsvariable AUTH0_ISSUER_URI
     @Value("${auth0.issuer-uri}")
     private String issuerUri;
 
@@ -52,10 +51,12 @@ public class SecurityConfig {
     }
 
     /**
-     * Expliziter JwtDecoder Bean — erforderlich für Spring Boot 4.0.
-     * Holt den JWKS automatisch vom Auth0 Discovery-Endpoint.
+     * @Lazy — der JwtDecoder wird erst beim ersten Aufruf initialisiert,
+     * nicht beim Start. So schlägt der Test nicht fehl wenn kein
+     * echter Auth0-Endpoint erreichbar ist.
      */
     @Bean
+    @Lazy
     public JwtDecoder jwtDecoder() {
         return NimbusJwtDecoder
             .withIssuerLocation(issuerUri)

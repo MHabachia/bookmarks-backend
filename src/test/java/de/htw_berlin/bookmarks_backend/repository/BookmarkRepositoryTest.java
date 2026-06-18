@@ -1,12 +1,10 @@
 package de.htw_berlin.bookmarks_backend.repository;
 
-import de.htw_berlin.bookmarks_backend.config.TestSecurityConfig;
 import de.htw_berlin.bookmarks_backend.model.Bookmark;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -20,13 +18,13 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Integrationstests für BookmarkRepository mit echter PostgreSQL.
+ * Integrationstests für BookmarkRepository mit echter PostgreSQL via Testcontainers.
+ * Security wird für diese Tests deaktiviert (application-test.properties).
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
 @SpringBootTest
 @Testcontainers
-@Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
 class BookmarkRepositoryTest {
 
