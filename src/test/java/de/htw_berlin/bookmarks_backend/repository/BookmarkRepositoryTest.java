@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -21,15 +22,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Integrationstests für BookmarkRepository mit echter PostgreSQL.
  *
- * Testcontainers startet PostgreSQL 16 automatisch.
- * Flyway läuft durch — V1 + V2 Migrationen werden ausgeführt.
- * JwtDecoder wird durch TestSecurityConfig gemockt.
- *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
 @SpringBootTest
 @Testcontainers
 @Import(TestSecurityConfig.class)
+@ActiveProfiles("test")
 class BookmarkRepositoryTest {
 
     @Container
@@ -40,8 +38,6 @@ class BookmarkRepositoryTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("auth0.issuer-uri", () -> "https://placeholder.auth0.com/");
-        registry.add("frontend.url", () -> "http://localhost:5173");
     }
 
     @Autowired
