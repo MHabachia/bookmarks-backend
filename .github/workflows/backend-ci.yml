@@ -11,12 +11,25 @@ jobs:
     name: Test & Build
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ${{ secrets.TEST_DB_NAME }}
+          POSTGRES_USER: ${{ secrets.TEST_DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-      # 1. Code auschecken
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Java 21 einrichten
       - name: Java 21 einrichten
         uses: actions/setup-java@v4
         with:
@@ -24,26 +37,23 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 3. Gradle Wrapper ausführbar machen
       - name: Gradle Wrapper berechtigen
         run: chmod +x gradlew
 
-      # 4. JUnit Tests ausführen (Mockito — kein DB nötig)
       - name: JUnit Tests ausführen
         run: ./gradlew test --no-daemon
         env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/test
-          SPRING_DATASOURCE_USERNAME: test
-          SPRING_DATASOURCE_PASSWORD: test
-          AUTH0_ISSUER_URI: https://placeholder.auth0.com/
-          FRONTEND_URL: http://localhost:5173
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/${{ secrets.TEST_DB_NAME }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets.TEST_DB_USER }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          AUTH0_ISSUER_URI: ${{ secrets.AUTH0_ISSUER_URI }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
 
-      # 5. Production JAR bauen
       - name: Production Build erstellen
         run: ./gradlew bootJar -x test --no-daemon
         env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/test
-          SPRING_DATASOURCE_USERNAME: test
-          SPRING_DATASOURCE_PASSWORD: test
-          AUTH0_ISSUER_URI: https://placeholder.auth0.com/
-          FRONTEND_URL: http://localhost:5173
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/${{ secrets.TEST_DB_NAME }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets.TEST_DB_USER }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          AUTH0_ISSUER_URI: ${{ secrets.AUTH0_ISSUER_URI }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
