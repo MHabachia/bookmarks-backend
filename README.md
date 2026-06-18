@@ -36,6 +36,7 @@ gesicherte REST-API bereit, die vom Vue.js-Frontend konsumiert wird. Alle Endpun
 | Flyway | 11.14 | Datenbank-Migration |
 | Lombok | aktuell | Boilerplate-Reduktion |
 | Docker | aktuell | Container-Deployment |
+| Testcontainers | 1.20.4 | Echte PostgreSQL in Tests |
 
 ---
 
@@ -47,25 +48,119 @@ bookmarks-backend/
 ├── build.gradle                                  ← Dependencies & Build-Konfiguration
 ├── settings.gradle
 └── src/
-    └── main/
+    ├── main/
+    │   ├── java/de/htw_berlin/bookmarks_backend/
+    │   │   ├── BookmarksBackendApplication.java  ← Einstiegspunkt (main)
+    │   │   ├── config/
+    │   │   │   └── SecurityConfig.java           ← JWT-Validierung, CORS
+    │   │   ├── controller/
+    │   │   │   └── BookmarkController.java       ← REST-Endpunkte
+    │   │   ├── model/
+    │   │   │   └── Bookmark.java                 ← JPA-Entität (inkl. ownerId)
+    │   │   ├── repository/
+    │   │   │   └── BookmarkRepository.java       ← Spring Data Repository
+    │   │   └── service/
+    │   │       └── BookmarkService.java          ← Geschäftslogik
+    │   └── resources/
+    │       ├── application.properties            ← Konfiguration (via Env-Variablen)
+    │       └── db/migration/
+    │           ├── V1__create_bookmarks.sql      ← Tabellen anlegen
+    │           └── V2__add_owner_id.sql          ← owner_id für User-Isolation
+    └── test/
         ├── java/de/htw_berlin/bookmarks_backend/
-        │   ├── BookmarksBackendApplication.java  ← Einstiegspunkt (main)
         │   ├── config/
-        │   │   └── SecurityConfig.java           ← JWT-Validierung, CORS
+        │   │   └── TestSecurityConfig.java       ← Security-Mock für Tests
         │   ├── controller/
-        │   │   └── BookmarkController.java       ← REST-Endpunkte
-        │   ├── model/
-        │   │   └── Bookmark.java                 ← JPA-Entität (inkl. ownerId)
+        │   │   └── BookmarkControllerTest.java   ← Unit-Tests (Mockito)
         │   ├── repository/
-        │   │   └── BookmarkRepository.java       ← Spring Data Repository
+        │   │   └── BookmarkRepositoryTest.java   ← Integrationstests (Testcontainers)
         │   └── service/
-        │       └── BookmarkService.java          ← Geschäftslogik
+        │       └── BookmarkServiceTest.java      ← Unit-Tests (Mockito)
         └── resources/
-            ├── application.properties            ← Konfiguration (via Env-Variablen)
-            └── db/migration/
-                ├── V1__create_bookmarks.sql      ← Tabellen anlegen
-                └── V2__add_owner_id.sql          ← owner_id für User-Isolation
+            └── application-test.properties       ← Test-Konfiguration
 ```
+
+---
+
+## Tests
+
+### Teststrategie
+
+Das Projekt nutzt zwei Arten von Tests entsprechend der **Test-Pyramide**:
+
+```
+         △  Integrationstests — echte PostgreSQL (Testcontainers)
+        △△△  Unit-Tests — Mockito (kein Datenbankzugriff)
+```
+
+**Unit-Tests** testen jede Schicht isoliert und sind sehr schnell.  
+**Integrationstests** testen SQL-Queries gegen eine echte Datenbank.
+
+### Tests ausführen
+
+```bash
+./gradlew test
+```
+
+### Testübersicht
+
+| Datei | Typ | Anzahl | Was wird getestet |
+|---|---|---|---|
+| `BookmarkServiceTest` | Unit (Mockito) | 6 | Geschäftslogik, `ownerId`-Zuordnung |
+| `BookmarkControllerTest` | Unit (Mockito) | 6 | HTTP-Status-Codes, Response-Bodies |
+| `BookmarkRepositoryTest` | Integration (Testcontainers) | 5 | SQL-Queries, Flyway-Migrationen, User-Isolation |
+
+**Gesamt: 17 Tests**
+
+### BookmarkServiceTest (Unit)
+
+Testet die Geschäftslogik ohne Datenbankverbindung via Mockito:
+
+- `getAllBookmarks` gibt nur Bookmarks des eingeloggten Users zurück
+- `createBookmark` setzt `ownerId` korrekt aus dem JWT-Token
+- `getBookmarkById` gibt Bookmark zurück wenn gefunden
+- `getBookmarkById` gibt leer zurück wenn nicht gefunden
+- `updateBookmark` aktualisiert Felder korrekt
+- `deleteBookmark` gibt `true`/`false` je nach Ergebnis
+
+### BookmarkControllerTest (Unit)
+
+Testet HTTP-Verhalten ohne Server und Datenbankverbindung:
+
+- `GET /api/bookmarks` → 200 mit Liste
+- `GET /api/bookmarks/{id}` → 200 wenn gefunden
+- `GET /api/bookmarks/{id}` → 404 wenn nicht gefunden
+- `POST /api/bookmarks` → 201 mit gespeichertem Bookmark
+- `DELETE /api/bookmarks/{id}` → 204 wenn erfolgreich
+- `DELETE /api/bookmarks/{id}` → 404 wenn nicht gefunden
+
+### BookmarkRepositoryTest (Integration)
+
+Testet SQL-Queries gegen eine **echte PostgreSQL 16** Datenbank via Testcontainers.
+Flyway läuft automatisch durch (V1 + V2 Migrationen):
+
+- `findByOwnerId` — User-Isolation funktioniert auf DB-Ebene
+- `findByIdAndOwnerId` — kein fremder User sieht fremde Bookmarks
+- `findByOwnerIdAndFavoritTrue` — Favoriten-Filter korrekt
+- `existsByIdAndOwnerId` — Existenz-Check mit User-Prüfung
+
+---
+
+## GitHub Actions CI
+
+Bei jedem Push auf `main` wird automatisch ausgeführt:
+
+```
+Push auf main
+      ↓
+1. Java 21 einrichten
+2. Gradle Wrapper berechtigen
+3. ./gradlew test  → 17 Tests (Unit + Integration mit Testcontainers)
+4. ./gradlew bootJar  → Production JAR bauen
+```
+
+Die Pipeline läuft vollständig ohne externe Dienste — Testcontainers startet
+PostgreSQL automatisch als Docker-Container innerhalb des GitHub Actions Runners.
 
 ---
 
@@ -81,64 +176,18 @@ bookmarks-backend/
 
 ```
 Lokal:       http://localhost:8080/api
-Produktion:  https://bookmarkit-backend.onrender.com/api
+Produktion:  https://bookmarks-backend-uats.onrender.com/api
 ```
 
 ### Endpunkte
 
-#### `GET /api/bookmarks`
-Gibt alle Bookmarks des eingeloggten Users zurück.
-
-**Response `200 OK`:**
-```json
-[
-  {
-    "id": 1,
-    "title": "HTW Berlin",
-    "url": "https://www.htw-berlin.de",
-    "description": "Hochschule für Technik und Wirtschaft Berlin",
-    "gelesen": false,
-    "favorit": false,
-    "tags": ["Studium", "HTW"],
-    "ownerId": "auth0|abc123",
-    "createdAt": "2026-05-26T12:00:00"
-  }
-]
-```
-
-#### `GET /api/bookmarks/{id}`
-Gibt einen einzelnen Bookmark zurück — nur wenn er dem eingeloggten User gehört.
-
-**Response `200 OK`:** Bookmark-Objekt  
-**Response `404 Not Found`:** Nicht gefunden oder gehört einem anderen User
-
-#### `POST /api/bookmarks`
-Erstellt einen neuen Bookmark. Die `ownerId` wird automatisch aus dem JWT-Token gesetzt.
-
-**Request-Body:**
-```json
-{
-  "title": "HTW Berlin",
-  "url": "https://www.htw-berlin.de",
-  "description": "Hochschule für Technik und Wirtschaft Berlin",
-  "tags": ["Studium", "HTW"]
-}
-```
-
-**Response `201 Created`:** Gespeicherter Bookmark mit generierter ID
-
-#### `PUT /api/bookmarks/{id}`
-Aktualisiert einen Bookmark — nur wenn er dem eingeloggten User gehört.  
-Wird auch für Favorit/Gelesen-Toggle genutzt.
-
-**Response `200 OK`:** Aktualisierter Bookmark  
-**Response `404 Not Found`:** Nicht gefunden oder gehört einem anderen User
-
-#### `DELETE /api/bookmarks/{id}`
-Löscht einen Bookmark — nur wenn er dem eingeloggten User gehört.
-
-**Response `204 No Content`:** Erfolgreich gelöscht  
-**Response `404 Not Found`:** Nicht gefunden oder gehört einem anderen User
+| Methode | Endpunkt | Beschreibung | Response |
+|---|---|---|---|
+| GET | `/api/bookmarks` | Alle Bookmarks des eingeloggten Users | 200 |
+| GET | `/api/bookmarks/{id}` | Einzelnen Bookmark laden | 200 / 404 |
+| POST | `/api/bookmarks` | Neuen Bookmark erstellen | 201 |
+| PUT | `/api/bookmarks/{id}` | Bookmark aktualisieren | 200 / 404 |
+| DELETE | `/api/bookmarks/{id}` | Bookmark löschen | 204 / 404 |
 
 ### Datenmodell
 
@@ -157,30 +206,6 @@ Löscht einen Bookmark — nur wenn er dem eingeloggten User gehört.
 ---
 
 ## Datenbank
-
-### Schema
-
-```sql
--- V1: Grundstruktur
-CREATE TABLE bookmarks (
-    id          BIGSERIAL PRIMARY KEY,
-    title       VARCHAR(255) NOT NULL,
-    url         VARCHAR(500) NOT NULL,
-    description TEXT,
-    gelesen     BOOLEAN DEFAULT FALSE,
-    favorit     BOOLEAN DEFAULT FALSE,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE bookmark_tags (
-    bookmark_id BIGINT REFERENCES bookmarks(id) ON DELETE CASCADE,
-    tag         VARCHAR(100)
-);
-
--- V2: User-Isolation via Auth0
-ALTER TABLE bookmarks ADD COLUMN owner_id VARCHAR(128) NOT NULL;
-CREATE INDEX idx_bookmarks_owner_id ON bookmarks(owner_id);
-```
 
 ### Flyway Migrationen
 
@@ -208,11 +233,6 @@ Frontend → Authorization: Bearer <JWT> → Spring Security
                                    Nur Bookmarks dieses Users
 ```
 
-Spring Security Konfiguration (`SecurityConfig.java`):
-- Alle `/api/**` Routen erfordern Authentifizierung
-- CORS erlaubt nur die eingetragene Frontend-URL (`FRONTEND_URL`)
-- CSRF deaktiviert (stateless REST API)
-
 ---
 
 ## Lokale Entwicklung
@@ -221,6 +241,7 @@ Spring Security Konfiguration (`SecurityConfig.java`):
 
 - Java 21
 - PostgreSQL (lokal installiert)
+- Docker (für Testcontainers)
 - Auth0-Account (kostenlos)
 
 ### Setup
@@ -232,12 +253,12 @@ cd bookmarks-backend
 
 Lokale Konfiguration anlegen (wird nicht committed):
 
-```bash
+```properties
 # src/main/resources/application-local.properties
 spring.datasource.url=jdbc:postgresql://localhost:5432/bookmarkit
 spring.datasource.username=postgres
 spring.datasource.password=DEIN_PASSWORT
-spring.security.oauth2.resourceserver.jwt.issuer-uri=https://dev-XXXXX.eu.auth0.com/
+auth0.issuer-uri=https://dev-XXXXX.eu.auth0.com/
 frontend.url=http://localhost:5173
 ```
 
@@ -247,25 +268,11 @@ frontend.url=http://localhost:5173
 ./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
-### JAR bauen
-
-```bash
-./gradlew bootJar
-# JAR liegt in: build/libs/bookmarks-backend-0.0.1-SNAPSHOT.jar
-```
-
 ---
 
 ## Deployment auf Render
 
-### Architektur
-
-```
-Internet → Render (SSL) → Docker Container :10000 → PostgreSQL (Render Managed)
-                Auth0 validiert JWT-Tokens
-```
-
-### Umgebungsvariablen auf Render setzen
+### Umgebungsvariablen
 
 | Variable | Beschreibung |
 |---|---|
@@ -274,14 +281,6 @@ Internet → Render (SSL) → Docker Container :10000 → PostgreSQL (Render Man
 | `SPRING_DATASOURCE_PASSWORD` | PostgreSQL Passwort |
 | `AUTH0_ISSUER_URI` | `https://dev-XXXXX.eu.auth0.com/` (mit `/` am Ende!) |
 | `FRONTEND_URL` | `https://bookmarkit-frontend.onrender.com` |
-
-### Render Build-Einstellungen
-
-| Einstellung | Wert |
-|---|---|
-| Runtime | Docker |
-| Dockerfile | `./Dockerfile` |
-| Port | `10000` |
 
 ---
 
@@ -305,8 +304,6 @@ Internet → Render (SSL) → Docker Container :10000 → PostgreSQL (Render Man
 |---|---|
 | Mohamad Habachia | [@MHabachia](https://github.com/MHabachia) |
 | Ibrahim Hassan | [@Hassan9977](https://github.com/Hassan9977) |
-
-### Repositories
 
 - **Backend:** https://github.com/MHabachia/bookmarks-backend
 - **Frontend:** https://github.com/MHabachia/bookmarks-frontend
