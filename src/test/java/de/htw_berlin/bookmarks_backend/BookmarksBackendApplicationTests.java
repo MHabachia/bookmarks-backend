@@ -1,13 +1,15 @@
 package de.htw_berlin.bookmarks_backend;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+/**
+ * Basis-Test — Context-Load wird separat in BookmarkRepositoryTest
+ * mit Testcontainers getestet.
+ */
 class BookmarksBackendApplicationTests {
 
-	@Test
-	void contextLoads() {
-	}
-
+    @Test
+    void contextLoads() {
+        // Context-Load wird in BookmarkRepositoryTest mit echter DB getestet
+    }
 }
