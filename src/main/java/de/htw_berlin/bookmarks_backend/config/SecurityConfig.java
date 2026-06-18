@@ -3,7 +3,7 @@ package de.htw_berlin.bookmarks_backend.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -20,11 +20,15 @@ import java.util.List;
 /**
  * Spring Security Konfiguration für JWT-Validierung via Auth0.
  *
+ * Mit @Profile("!test") wird diese Klasse im Test-Profil vollständig
+ * ignoriert — TestSecurityConfig übernimmt dann.
+ *
  * @author Mohamad Habachia, Ibrahim Hassan
- * @version 2.2
+ * @version 2.3
  */
 @Configuration
 @EnableWebSecurity
+@Profile("!test")
 public class SecurityConfig {
 
     @Value("${auth0.issuer-uri}")
@@ -50,13 +54,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * @Lazy — der JwtDecoder wird erst beim ersten Aufruf initialisiert,
-     * nicht beim Start. So schlägt der Test nicht fehl wenn kein
-     * echter Auth0-Endpoint erreichbar ist.
-     */
     @Bean
-    @Lazy
     public JwtDecoder jwtDecoder() {
         return NimbusJwtDecoder
             .withIssuerLocation(issuerUri)
