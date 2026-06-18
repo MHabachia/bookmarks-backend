@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
-    name: Build & Test
+  test-and-build:
+    name: Test & Build
     runs-on: ubuntu-latest
 
     steps:
@@ -28,8 +28,18 @@ jobs:
       - name: Gradle Wrapper berechtigen
         run: chmod +x gradlew
 
-      # 4. Projekt bauen (ohne Tests — kein DB verfügbar in CI)
-      - name: Projekt bauen
+      # 4. JUnit Tests ausführen (Mockito — kein DB nötig)
+      - name: JUnit Tests ausführen
+        run: ./gradlew test --no-daemon
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/test
+          SPRING_DATASOURCE_USERNAME: test
+          SPRING_DATASOURCE_PASSWORD: test
+          AUTH0_ISSUER_URI: https://placeholder.auth0.com/
+          FRONTEND_URL: http://localhost:5173
+
+      # 5. Production JAR bauen
+      - name: Production Build erstellen
         run: ./gradlew bootJar -x test --no-daemon
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/test
