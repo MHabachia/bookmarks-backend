@@ -1,10 +1,13 @@
 package de.htw_berlin.bookmarks_backend.repository;
 
+import de.htw_berlin.bookmarks_backend.config.SecurityConfig;
+import de.htw_berlin.bookmarks_backend.config.TestSecurityConfig;
 import de.htw_berlin.bookmarks_backend.model.Bookmark;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -19,13 +22,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integrationstests für BookmarkRepository mit echter PostgreSQL via Testcontainers.
- * Security wird für diese Tests deaktiviert (application-test.properties).
+ *
+ * SecurityConfig wird durch TestSecurityConfig ersetzt —
+ * kein JWT-Decoder, kein Auth0-Aufruf beim Start.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
-@SpringBootTest
+@SpringBootTest(
+    // SecurityConfig aus dem Test-Context ausschließen
+    properties = "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration"
+)
 @Testcontainers
 @ActiveProfiles("test")
+@Import(TestSecurityConfig.class)
 class BookmarkRepositoryTest {
 
     @Container
@@ -36,6 +45,8 @@ class BookmarkRepositoryTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        // SecurityConfig Bean-Override erlauben
+        registry.add("spring.main.allow-bean-definition-overriding", () -> "true");
     }
 
     @Autowired

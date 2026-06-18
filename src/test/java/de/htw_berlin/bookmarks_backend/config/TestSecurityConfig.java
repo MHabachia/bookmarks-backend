@@ -2,18 +2,12 @@ package de.htw_berlin.bookmarks_backend.config;
 
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-
-import static org.mockito.Mockito.mock;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Test-Sicherheitskonfiguration.
- *
- * Ersetzt den echten JwtDecoder (der Auth0 aufrufen würde)
- * durch einen Mockito-Mock — Spring Boot kann so starten
- * ohne eine echte Auth0-Verbindung aufzubauen.
- *
- * Wird über @Import in Integrationstests eingebunden.
+ * Ersetzt SecurityConfig vollständig für Integrationstests.
+ * Alle Requests werden erlaubt — kein JWT-Decoder nötig.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
@@ -21,7 +15,10 @@ import static org.mockito.Mockito.mock;
 public class TestSecurityConfig {
 
     @Bean
-    public JwtDecoder jwtDecoder() {
-        return mock(JwtDecoder.class);
+    public SecurityFilterChain testFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
     }
 }
