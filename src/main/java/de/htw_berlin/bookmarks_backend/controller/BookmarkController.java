@@ -15,43 +15,77 @@ import java.util.List;
 /**
  * REST-Controller für die Bookmark-API.
  *
- * <p>Änderungen gegenüber v1.4:</p>
+ * <p>Stellt alle CRUD-Endpunkte unter dem Basispfad {@code /api} bereit.
+ * Alle Endpunkte erfordern einen gültigen JWT-Bearer-Token im
+ * {@code Authorization} Header (gesichert durch {@code SecurityConfig}).</p>
+ *
+ * <p>Die Auth0 User-ID wird aus dem JWT-Token extrahiert ({@code sub} Claim)
+ * und an den {@link BookmarkService} weitergegeben — so sieht jeder User
+ * nur seine eigenen Bookmarks.</p>
+ *
+ * <p>CORS wird zentral in {@code SecurityConfig.corsConfigurationSource()} geregelt,
+ * nicht mehr per {@code @CrossOrigin} Annotation.</p>
+ *
+ * <p>Verfügbare Endpunkte:</p>
  * <ul>
- *   <li>{@code @CrossOrigin} entfernt — CORS wird jetzt zentral in {@code SecurityConfig} geregelt</li>
- *   <li>Alle Methoden erhalten den {@link JwtAuthenticationToken} Parameter —
- *       damit kann die Auth0-User-ID ({@code sub} Claim) ausgelesen werden</li>
- *   <li>Bookmarks werden nur noch für den eingeloggten User geladen/erstellt</li>
+ *   <li>{@code GET /api/bookmarks} — Alle Bookmarks des Users</li>
+ *   <li>{@code GET /api/bookmarks/{id}} — Einzelner Bookmark</li>
+ *   <li>{@code POST /api/bookmarks} — Neuen Bookmark erstellen</li>
+ *   <li>{@code PUT /api/bookmarks/{id}} — Bookmark aktualisieren</li>
+ *   <li>{@code DELETE /api/bookmarks/{id}} — Bookmark löschen</li>
  * </ul>
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  * @version 2.0
+ * @since SoSe 2026
+ * @see BookmarkService
+ * @see de.htw_berlin.bookmarks_backend.config.SecurityConfig
  */
 @RestController
 @RequestMapping("/api")
-// @CrossOrigin ENTFERNT — wird jetzt in SecurityConfig.corsConfigurationSource() geregelt
 @RequiredArgsConstructor
 public class BookmarkController {
 
+    /**
+     * Service für die Geschäftslogik der Bookmark-Verwaltung.
+     * Wird per Constructor Injection von Spring injiziert.
+     */
     private final BookmarkService bookmarkService;
 
     /**
      * Gibt alle Bookmarks des eingeloggten Users zurück.
      *
-     * <p>{@code token.getName()} gibt den {@code sub}-Claim des JWT zurück,
-     * z.B. {@code "auth0|abc123"} — das ist die eindeutige Auth0 User-ID.</p>
+     * <p>{@code token.getName()} liefert den {@code sub}-Claim des JWT-Tokens,
+     * z.B. {@code "auth0|abc123"} — die eindeutige Auth0 User-ID.</p>
      *
-     * @param token der JWT-Token des eingeloggten Users (von Spring Security injiziert)
-     * @return Liste der Bookmarks dieses Users
+     * <p>HTTP: {@code GET /api/bookmarks}</p>
+     *
+     * @param token der JWT-Token des eingeloggten Users,
+     *              wird von Spring Security automatisch injiziert
+     * @return Liste aller Bookmarks dieses Users als JSON,
+     *         leer wenn keine Bookmarks vorhanden ({@code 200 OK})
      */
     @GetMapping(value = "/bookmarks", produces = MediaType.APPLICATION_JSON_VALUE)
     public List<Bookmark> getBookmarks(JwtAuthenticationToken token) {
-        String ownerId = token.getName(); // Auth0 sub: "auth0|abc123"
+        String ownerId = token.getName();
         return bookmarkService.getAllBookmarks(ownerId);
     }
 
     /**
      * Gibt einen einzelnen Bookmark des eingeloggten Users zurück.
-     * Gibt 404 zurück wenn der Bookmark einem anderen User gehört.
+     *
+     * <p>Gibt {@code 404 Not Found} zurück wenn:</p>
+     * <ul>
+     *   <li>Die ID nicht in der Datenbank existiert</li>
+     *   <li>Die ID existiert, aber einem anderen User gehört</li>
+     * </ul>
+     *
+     * <p>HTTP: {@code GET /api/bookmarks/{id}}</p>
+     *
+     * @param id    die Datenbank-ID des gesuchten Bookmarks (Pfadvariable)
+     * @param token der JWT-Token des eingeloggten Users
+     * @return {@code 200 OK} mit dem Bookmark als JSON,
+     *         oder {@code 404 Not Found} wenn nicht gefunden
      */
     @GetMapping(value = "/bookmarks/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Bookmark> getBookmarkById(
@@ -65,7 +99,26 @@ public class BookmarkController {
 
     /**
      * Erstellt einen neuen Bookmark für den eingeloggten User.
-     * Die {@code ownerId} wird aus dem Token gesetzt — das Frontend muss sie nicht mitsenden.
+     *
+     * <p>Die {@code ownerId} wird serverseitig aus dem JWT-Token gesetzt —
+     * das Frontend muss sie nicht mitsenden. Felder werden per Bean Validation
+     * ({@code @Valid}) geprüft: {@code title} und {@code url} sind Pflichtfelder.</p>
+     *
+     * <p>HTTP: {@code POST /api/bookmarks}</p>
+     *
+     * <p>Beispiel Request-Body:</p>
+     * <pre>
+     * {
+     *   "title": "HTW Berlin",
+     *   "url": "https://www.htw-berlin.de",
+     *   "description": "Meine Hochschule",
+     *   "tags": ["Studium", "HTW"]
+     * }
+     * </pre>
+     *
+     * @param bookmark das neue Bookmark-Objekt aus dem Request-Body (JSON)
+     * @param token    der JWT-Token des eingeloggten Users
+     * @return {@code 201 Created} mit dem gespeicherten Bookmark (inkl. generierter ID)
      */
     @PostMapping(value = "/bookmarks",
             consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -80,6 +133,17 @@ public class BookmarkController {
 
     /**
      * Aktualisiert einen Bookmark — nur wenn er dem eingeloggten User gehört.
+     *
+     * <p>Wird auch für das Togglen von Favorit- und Gelesen-Status verwendet,
+     * da diese Felder Teil des Bookmark-Objekts sind.</p>
+     *
+     * <p>HTTP: {@code PUT /api/bookmarks/{id}}</p>
+     *
+     * @param id       die Datenbank-ID des zu aktualisierenden Bookmarks (Pfadvariable)
+     * @param bookmark das Bookmark-Objekt mit den neuen Werten (Request-Body, JSON)
+     * @param token    der JWT-Token des eingeloggten Users
+     * @return {@code 200 OK} mit dem aktualisierten Bookmark,
+     *         oder {@code 404 Not Found} wenn nicht gefunden oder falscher User
      */
     @PutMapping(value = "/bookmarks/{id}",
             consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -96,6 +160,13 @@ public class BookmarkController {
 
     /**
      * Löscht einen Bookmark — nur wenn er dem eingeloggten User gehört.
+     *
+     * <p>HTTP: {@code DELETE /api/bookmarks/{id}}</p>
+     *
+     * @param id    die Datenbank-ID des zu löschenden Bookmarks (Pfadvariable)
+     * @param token der JWT-Token des eingeloggten Users
+     * @return {@code 204 No Content} wenn erfolgreich gelöscht,
+     *         oder {@code 404 Not Found} wenn nicht gefunden oder falscher User
      */
     @DeleteMapping("/bookmarks/{id}")
     public ResponseEntity<Void> deleteBookmark(
