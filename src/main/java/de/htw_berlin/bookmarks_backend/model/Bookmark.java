@@ -4,8 +4,10 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,46 +17,47 @@ import java.util.List;
  *
  * <p>Repräsentiert einen Bookmark in der Datenbank-Tabelle {@code bookmarks}.
  * Tags werden in einer separaten Tabelle {@code bookmark_tags} gespeichert
- * und werden beim Laden eager gefetcht.</p>
+ * und werden beim Laden gefetcht.</p>
  *
  * <p>Jeder Bookmark gehört genau einem User — identifiziert durch die
- * {@code ownerId} (Auth0 {@code sub} Claim). Beim Zugriff über die API
- * werden immer nur die Bookmarks des eingeloggten Users zurückgegeben.</p>
+ * {@code ownerId} (Auth0 {@code sub} Claim).</p>
  *
- * <p>Lombok-Annotationen generieren automatisch:</p>
+ * <p>Lombok-Annotationen:</p>
  * <ul>
- *   <li>{@code @Data} → Getter, Setter, equals(), hashCode(), toString()</li>
+ *   <li>{@code @Getter} / {@code @Setter} → Getter und Setter für alle Felder</li>
  *   <li>{@code @NoArgsConstructor} → Standardkonstruktor (für JPA erforderlich)</li>
  *   <li>{@code @AllArgsConstructor} → Konstruktor mit allen Feldern</li>
+ *   <li>{@code @EqualsAndHashCode(onlyExplicitlyIncluded = true)} →
+ *       equals/hashCode nur auf {@code id} — sicher für JPA/Hibernate</li>
  * </ul>
  *
  * @author Mohamad Habachia, Ibrahim Hassan
- * @version 2.0
+ * @version 2.1
  * @since SoSe 2026
- * @see BookmarkRepository
- * @see BookmarkService
+ * @see de.htw_berlin.bookmarks_backend.repository.BookmarkRepository
+ * @see de.htw_berlin.bookmarks_backend.service.BookmarkService
  */
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Entity
 @Table(name = "bookmarks")
 public class Bookmark {
 
     /**
      * Eindeutiger Primärschlüssel, automatisch generiert von der Datenbank.
-     * Entspricht der Spalte {@code id} (BIGSERIAL).
+     * Wird für equals/hashCode verwendet ({@code @EqualsAndHashCode.Include}).
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
     /**
      * Titel des Bookmarks.
      * Pflichtfeld, darf nicht leer sein und maximal 255 Zeichen lang.
-     *
-     * @see NotBlank
-     * @see Size
      */
     @NotBlank(message = "Titel darf nicht leer sein")
     @Size(max = 255, message = "Titel darf maximal 255 Zeichen haben")
@@ -93,13 +96,7 @@ public class Bookmark {
 
     /**
      * Liste der Tags/Kategorien des Bookmarks.
-     *
-     * <p>Wird in der separaten Tabelle {@code bookmark_tags} gespeichert.
-     * Beim Löschen eines Bookmarks werden zugehörige Tags automatisch
-     * gelöscht (ON DELETE CASCADE in V1-Migration).</p>
-     *
-     * <p>Fetch-Typ EAGER bedeutet: Tags werden immer zusammen mit dem
-     * Bookmark geladen, kein separater SQL-Query nötig.</p>
+     * Gespeichert in Tabelle {@code bookmark_tags}, EAGER gefetcht.
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "bookmark_tags", joinColumns = @JoinColumn(name = "bookmark_id"))
@@ -107,33 +104,20 @@ public class Bookmark {
     private List<String> tags;
 
     /**
-     * Auth0 User-ID des Besitzers dieses Bookmarks.
-     *
-     * <p>Entspricht dem {@code sub} Claim des JWT-Tokens.
-     * Mögliche Formate:</p>
-     * <ul>
-     *   <li>{@code auth0|abc123} — Auth0 Username/Password</li>
-     *   <li>{@code google-oauth2|abc123} — Google Social Login</li>
-     * </ul>
-     *
-     * <p>Wird beim Erstellen automatisch aus dem JWT-Token gesetzt
-     * ({@link BookmarkService#createBookmark}) und kann danach nicht
-     * mehr verändert werden ({@code updatable = false}).</p>
+     * Auth0 User-ID des Besitzers dieses Bookmarks ({@code sub} Claim).
+     * Wird beim Erstellen automatisch gesetzt und kann nicht verändert werden.
      */
     @Column(name = "owner_id", nullable = false, updatable = false)
     private String ownerId;
 
     /**
-     * Zeitstempel der Erstellung dieses Bookmarks.
-     * Wird automatisch beim ersten Speichern gesetzt ({@link #onCreate()}).
-     * Kann danach nicht mehr verändert werden ({@code updatable = false}).
+     * Zeitstempel der Erstellung. Automatisch gesetzt, nicht veränderbar.
      */
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     /**
-     * JPA Lifecycle-Callback: wird automatisch vor dem ersten Speichern aufgerufen.
-     * Setzt {@link #createdAt} auf den aktuellen Zeitstempel.
+     * JPA Lifecycle-Callback: setzt {@link #createdAt} beim ersten Speichern.
      */
     @PrePersist
     protected void onCreate() {

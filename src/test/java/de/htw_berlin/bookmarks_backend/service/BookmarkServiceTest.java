@@ -18,9 +18,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit-Tests für BookmarkService.
- *
- * Verwendet Mockito um das Repository zu mocken —
- * keine Datenbankverbindung nötig.
+ * Verwendet Mockito — keine Datenbankverbindung nötig.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
@@ -114,22 +112,27 @@ class BookmarkServiceTest {
 
     @Test
     void deleteBookmark_gibtTrue_wennErfolgreich() {
-        when(bookmarkRepository.existsByIdAndOwnerId(1L, "auth0|test123")).thenReturn(true);
-        doNothing().when(bookmarkRepository).deleteById(1L);
+        // Fix: findByIdAndOwnerId statt existsByIdAndOwnerId
+        when(bookmarkRepository.findByIdAndOwnerId(1L, "auth0|test123"))
+            .thenReturn(Optional.of(testBookmark));
+        doNothing().when(bookmarkRepository).delete(testBookmark);
 
         boolean result = bookmarkService.deleteBookmark(1L, "auth0|test123");
 
         assertThat(result).isTrue();
-        verify(bookmarkRepository, times(1)).deleteById(1L);
+        verify(bookmarkRepository, times(1)).delete(testBookmark);
+        // Kein existsByIdAndOwnerId mehr — nur 1 Query
+        verify(bookmarkRepository, never()).existsByIdAndOwnerId(any(), any());
     }
 
     @Test
     void deleteBookmark_gibtFalse_wennNichtGefunden() {
-        when(bookmarkRepository.existsByIdAndOwnerId(99L, "auth0|test123")).thenReturn(false);
+        when(bookmarkRepository.findByIdAndOwnerId(99L, "auth0|test123"))
+            .thenReturn(Optional.empty());
 
         boolean result = bookmarkService.deleteBookmark(99L, "auth0|test123");
 
         assertThat(result).isFalse();
-        verify(bookmarkRepository, never()).deleteById(any());
+        verify(bookmarkRepository, never()).delete(any(Bookmark.class));
     }
 }

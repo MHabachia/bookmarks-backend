@@ -21,7 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integrationstests für BookmarkRepository mit echter PostgreSQL via Testcontainers.
- * Flyway wird manuell vor dem Spring-Context ausgeführt.
  *
  * @author Mohamad Habachia, Ibrahim Hassan
  */
@@ -45,10 +44,6 @@ class BookmarkRepositoryTest {
         registry.add("spring.main.allow-bean-definition-overriding", () -> "true");
     }
 
-    /**
-     * Flyway manuell ausführen — bevor Spring Boot den Context lädt.
-     * So sind die Tabellen garantiert vorhanden wenn die Tests starten.
-     */
     @BeforeAll
     static void runMigrations() {
         Flyway.configure()
@@ -113,6 +108,17 @@ class BookmarkRepositoryTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getTitle()).isEqualTo("Favorit");
+    }
+
+    @Test
+    void existsByIdAndOwnerId_gibtTrue_wennUserStimmt() {
+        Bookmark saved = bookmarkRepository.save(
+            createBookmark("HTW Berlin", "https://htw-berlin.de", "auth0|user1")
+        );
+
+        boolean exists = bookmarkRepository.existsByIdAndOwnerId(saved.getId(), "auth0|user1");
+
+        assertThat(exists).isTrue();
     }
 
     @Test
